@@ -19,15 +19,20 @@ MCX EOD Strategy.lnk
 
 The shortcut runs `launch_mcx_eod_strategy.vbs` invisibly. It starts the local
 Python API bridge and Vite frontend, finds the next available ports, waits for
-both services to respond, and opens the UI in the browser. The React page is
-intentionally blank for now, but it already connects to `/api/health` through
-the Vite proxy.
+both services to respond, and opens the UI in the browser. The UI currently
+includes a data-status and download-window page, a trade-entry preview page,
+and an editable settings page.
 
 The bridge endpoints currently include:
 
 - `/api/health`
 - `/api/status`
 - `/api/settings`
+- `/api/strategy/preview?date=YYYY-MM-DD`
+
+The UI is a basic control surface for the existing workflow. The downloader
+itself remains available from the console so its interactive progress and
+worker messages stay visible during a long MCX API run.
 
 The strategy uses major SILVER futures only to identify the daily Silver price
 and ATM strike. The actual trade, target, stop-loss, averaging, MTM, and exit
