@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CandlestickSeries, createChart } from 'lightweight-charts'
+import { CandlestickSeries, HistogramSeries, createChart } from 'lightweight-charts'
 
 const NAV_ITEMS = [
   { path: '/data-download', label: 'Data Download', icon: '↓' },
@@ -66,6 +66,9 @@ function FuturesChartPage() {
     const chart = createChart(container, { autoSize: true, height: 520, layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#587391' }, grid: { vertLines: { color: '#e7f0fa' }, horzLines: { color: '#e7f0fa' } }, rightPriceScale: { borderColor: '#d8e6f4' }, timeScale: { borderColor: '#d8e6f4', timeVisible: false, rightOffset: 5 }, crosshair: { mode: 0 } })
     const series = chart.addSeries(CandlestickSeries, { upColor: '#1fb982', downColor: '#ef6676', borderVisible: false, wickUpColor: '#159a68', wickDownColor: '#d65364' })
     series.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })))
+    const volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' })
+    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
+    volumeSeries.setData(data.map(({ time, open, close, volume }) => ({ time, value: volume, color: close >= open ? '#8bdcc1' : '#f4a3ad' })))
     const visibleCount = range === 'ALL' ? data.length : range === '1M' ? 22 : range === '3M' ? 66 : 252
     chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - visibleCount), to: data.length + 2 })
     chart.subscribeCrosshairMove((param) => { const candle = param.seriesData?.get(series); setHovered(candle ? { ...candle, time: candle.time } : null) })

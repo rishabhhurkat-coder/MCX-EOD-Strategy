@@ -5,8 +5,8 @@ Run from the project folder with:
     python "backend/MCX Data Downloader.py"
 
 The program uses the current official MCX commodity-wise API, processes
-downloads in memory, and writes only the normalized option and major-SILVER
-futures CSV files to data/outputs. No browser window is required.
+downloads in memory, and writes the normalized option and major-SILVER
+futures CSV files to the configured local data folders. No browser window is required.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / "config" / "instruments.json"
 OUTPUT_DIR = PROJECT_ROOT / "data" / "outputs"
 OUTPUT_CSV = OUTPUT_DIR / "silverm_options.csv"
-FUTURES_OUTPUT_CSV = OUTPUT_DIR / "silver_futures.csv"
+FUTURES_OUTPUT_CSV = PROJECT_ROOT / "data" / "inputs" / "silver_futures.csv"
 FUTURES_INSTRUMENT = "FUTCOM"
 FUTURES_COMMODITY = "SILVER"
 
@@ -80,31 +80,18 @@ OUTPUT_HEADERS = {
     "volume_lots": "Volume",
 }
 
-FUTURES_COLUMNS = [
-    "trade_date",
-    "symbol",
-    "expiry_date",
-    "open",
-    "high",
-    "low",
-    "close",
-    "volume_lots",
-    "open_interest_lots",
-]
+FUTURES_COLUMNS = ["trade_date", "open", "high", "low", "close", "volume_lots"]
 
 FUTURES_HEADERS = {
     "trade_date": "Date",
-    "symbol": "Symbol",
-    "expiry_date": "Expiry",
     "open": "Open",
     "high": "High",
     "low": "Low",
     "close": "Close",
     "volume_lots": "Volume",
-    "open_interest_lots": "Open Interest",
 }
 
-FUTURES_KEY_COLUMNS = ["trade_date", "commodity", "expiry_date"]
+FUTURES_KEY_COLUMNS = ["trade_date", "expiry_date"]
 
 
 @dataclass(frozen=True)
@@ -227,17 +214,22 @@ def atomic_write_csv(frame: pd.DataFrame, path: Path) -> pd.DataFrame:
 
 
 def clean_futures_for_output(frame: pd.DataFrame) -> pd.DataFrame:
-    """Clean major SILVER futures rows into the final futures schema."""
+    """Keep one major-SILVER candle per date using the earliest expiry."""
     if frame.empty:
         return pd.DataFrame(columns=list(FUTURES_HEADERS.values()))
     output = frame.copy()
     for field in ("open", "high", "low", "close", "volume_lots", "open_interest_lots"):
-        output[field] = pd.to_numeric(output[field], errors="coerce")
+        if field in output.columns:
+            output[field] = pd.to_numeric(output[field], errors="coerce")
     output = output[output["volume_lots"].fillna(0).gt(0)]
-    output = output[output[["open", "high", "low"]].notna().all(axis=1)]
+    output = output[output[["open", "high", "low", "close"]].notna().all(axis=1)]
+    output["trade_date"] = pd.to_datetime(output["trade_date"], errors="coerce")
+    output["expiry_date"] = pd.to_datetime(output["expiry_date"], errors="coerce")
+    output = output.dropna(subset=["trade_date", "expiry_date"])
+    output = output.sort_values(["trade_date", "expiry_date"], kind="stable")
+    output = output.drop_duplicates("trade_date", keep="first")
     output = output[FUTURES_COLUMNS].copy()
     output["trade_date"] = pd.to_datetime(output["trade_date"], errors="coerce").dt.strftime("%d-%b-%y")
-    output["expiry_date"] = pd.to_datetime(output["expiry_date"], errors="coerce").dt.strftime("%d-%b-%y")
     output = output.rename(columns=FUTURES_HEADERS)
     return output.reset_index(drop=True)
 
@@ -339,7 +331,12 @@ def read_existing_futures_output() -> pd.DataFrame:
         return pd.DataFrame()
     try:
         output = pd.read_csv(FUTURES_OUTPUT_CSV)
-        cleaned_headers = {value: key for key, value in FUTURES_HEADERS.items()}
+        cleaned_headers = {
+            **{value: key for key, value in FUTURES_HEADERS.items()},
+            "Symbol": "symbol",
+            "Expiry": "expiry_date",
+            "Open Interest": "open_interest_lots",
+        }
         if "Date" in output.columns:
             output = output.rename(columns=cleaned_headers)
             output["instrument"] = FUTURES_INSTRUMENT
@@ -347,6 +344,11 @@ def read_existing_futures_output() -> pd.DataFrame:
             output["option_type"] = "-"
             output["strike_price"] = 0.0
             output["settlement_price"] = None
+        if "expiry_date" not in output.columns:
+            # New six-column output has already selected its earliest expiry.
+            # A same-day placeholder keeps the existing-data path compatible
+            # with the internal downloader schema during the next run.
+            output["expiry_date"] = output["trade_date"]
         for field in ("trade_date", "expiry_date"):
             if field in output.columns:
                 output[field] = pd.to_datetime(output[field], errors="coerce", format="mixed").dt.strftime("%Y-%m-%d")

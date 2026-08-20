@@ -77,11 +77,16 @@ Date, Symbol, Expiry, Option Type, Strike Price, Open, High, Low, Close, Volume
 
 `Date` and `Expiry` are written as `dd-mmm-yy`, for example `02-Jan-25`.
 
-The futures file contains one valid major-SILVER contract row per trade date and expiry, with these columns:
+The futures file keeps one row per unique trade date, choosing the earliest
+available expiry for that date. The expiry and duplicate contract rows are
+removed before saving. Its final columns are:
 
 ```text
-Date, Symbol, Expiry, Open, High, Low, Close, Volume, Open Interest
+Date, Open, High, Low, Close, Volume
 ```
+
+The FUT chart reads this six-column CSV directly and renders the candles with
+TradingView Lightweight Charts.
 
 The console stays compact, shows each expiry-window request as it runs, and shows the total time taken when the run finishes. Downloads are processed in memory; no raw download, state, or log files are created. The downloader calls MCX directly over HTTP and does not open Chrome or any browser window.
 

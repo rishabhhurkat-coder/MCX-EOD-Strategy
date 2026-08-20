@@ -66,23 +66,42 @@ def status_payload() -> dict:
 
 
 def futures_chart_payload() -> dict:
-    rules = strategy_module()
     settings = load_json(CONFIG_FILE)
-    daily = rules.load_silver(settings)
+    path_value = settings.get("paths", {}).get("silver_futures_csv", "data/inputs/silver_futures.csv")
+    path = Path(path_value)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    if not path.exists():
+        raise FileNotFoundError(f"Silver futures CSV not found: {path}")
+
     candles = []
-    for _, row in daily.iterrows():
-        candles.append({
-            "time": row["Date"].strftime("%Y-%m-%d"),
-            "open": float(row["Open"]),
-            "high": float(row["High"]),
-            "low": float(row["Low"]),
-            "close": float(row["Close"]),
-            "volume": float(row["Volume"]),
-            "expiry": row["Expiry"].strftime("%d-%m-%Y"),
-        })
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            raw_date = str(row.get("Date", "")).strip()
+            parsed_date = None
+            for date_format in ("%d-%b-%y", "%d-%b-%Y", "%Y-%m-%d"):
+                try:
+                    parsed_date = datetime.strptime(raw_date, date_format)
+                    break
+                except ValueError:
+                    continue
+            if parsed_date is None:
+                continue
+            try:
+                candles.append({
+                    "time": parsed_date.strftime("%Y-%m-%d"),
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": float(row["Close"]),
+                    "volume": float(row["Volume"]),
+                })
+            except (KeyError, TypeError, ValueError):
+                continue
+    candles.sort(key=lambda item: item["time"])
     return {
         "symbol": settings["market"].get("futures_symbol", "SILVER"),
-        "contract_selection": settings["market"].get("contract_selection", "nearest_expiry"),
         "candles": candles,
     }
 
@@ -200,7 +219,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, PUT, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 

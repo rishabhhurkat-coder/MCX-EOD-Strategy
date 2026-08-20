@@ -289,16 +289,22 @@ def load_silver(settings: dict) -> pd.DataFrame:
 
     df = pd.read_csv(path, low_memory=False)
     df.columns = df.columns.astype(str).str.strip()
-    required = ["Date", "Symbol", "Expiry", "Open", "High", "Low", "Close"]
+    required = ["Date", "Open", "High", "Low", "Close"]
     missing = [column for column in required if column not in df.columns]
     if missing:
         raise ValueError(f"Silver futures file is missing: {missing}")
 
     futures_symbol = str(settings["market"]["futures_symbol"]).strip().upper()
+    simplified_futures = "Symbol" not in df.columns or "Expiry" not in df.columns
+    if "Symbol" not in df.columns:
+        df["Symbol"] = futures_symbol
     df["Symbol"] = df["Symbol"].astype(str).str.strip().str.upper()
     df = df[df["Symbol"] == futures_symbol].copy()
     df["Date"] = parse_dates(df["Date"])
-    df["Expiry"] = parse_dates(df["Expiry"])
+    if "Expiry" in df.columns:
+        df["Expiry"] = parse_dates(df["Expiry"])
+    else:
+        df["Expiry"] = df["Date"]
 
     for column in ["Open", "High", "Low", "Close"]:
         df[column] = number(df[column])
@@ -308,11 +314,12 @@ def load_silver(settings: dict) -> pd.DataFrame:
         df["Volume"] = 0.0
 
     df = df.dropna(subset=required).copy()
-    allow_expiry_day = bool(settings["strategy"].get("allow_expiry_day", False))
-    if allow_expiry_day:
-        df = df[df["Expiry"] >= df["Date"]]
-    else:
-        df = df[df["Expiry"] > df["Date"]]
+    if not simplified_futures:
+        allow_expiry_day = bool(settings["strategy"].get("allow_expiry_day", False))
+        if allow_expiry_day:
+            df = df[df["Expiry"] >= df["Date"]]
+        else:
+            df = df[df["Expiry"] > df["Date"]]
 
     selection = str(settings["market"].get("contract_selection", "nearest_expiry")).lower()
     if selection == "highest_volume":
