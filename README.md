@@ -20,14 +20,15 @@ MCX EOD Strategy.lnk
 The shortcut runs `launch_mcx_eod_strategy.vbs` invisibly. It starts the local
 Python API bridge and Vite frontend, finds the next available ports, waits for
 both services to respond, and opens the UI in the browser. The UI currently
-includes a data-status and download-window page, a trade-entry preview page,
-and an editable settings page.
+includes a data-status and download-window page, a TradingView Lightweight
+Charts futures page, a trade-entry preview page, and an editable settings page.
 
 The bridge endpoints currently include:
 
 - `/api/health`
 - `/api/status`
 - `/api/settings`
+- `/api/market/futures`
 - `/api/strategy/preview?date=YYYY-MM-DD`
 
 The UI is a basic control surface for the existing workflow. The downloader

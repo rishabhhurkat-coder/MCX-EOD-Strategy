@@ -65,6 +65,28 @@ def status_payload() -> dict:
     }
 
 
+def futures_chart_payload() -> dict:
+    rules = strategy_module()
+    settings = load_json(CONFIG_FILE)
+    daily = rules.load_silver(settings)
+    candles = []
+    for _, row in daily.iterrows():
+        candles.append({
+            "time": row["Date"].strftime("%Y-%m-%d"),
+            "open": float(row["Open"]),
+            "high": float(row["High"]),
+            "low": float(row["Low"]),
+            "close": float(row["Close"]),
+            "volume": float(row["Volume"]),
+            "expiry": row["Expiry"].strftime("%d-%m-%Y"),
+        })
+    return {
+        "symbol": settings["market"].get("futures_symbol", "SILVER"),
+        "contract_selection": settings["market"].get("contract_selection", "nearest_expiry"),
+        "candles": candles,
+    }
+
+
 def strategy_module():
     path = PROJECT_ROOT / "backend" / "StategyRules.py"
     spec = importlib.util.spec_from_file_location("mcx_strategy_rules", path)
@@ -196,6 +218,8 @@ class BridgeHandler(BaseHTTPRequestHandler):
                 self.send_json(status_payload())
             elif route == "/api/settings":
                 self.send_json(load_json(CONFIG_FILE))
+            elif route == "/api/market/futures":
+                self.send_json(futures_chart_payload())
             elif route == "/api/strategy/preview":
                 date_value = parse_qs(parsed.query).get("date", [""])[0]
                 self.send_json(entry_preview(date_value))

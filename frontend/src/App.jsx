@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CandlestickSeries, createChart } from 'lightweight-charts'
 
 const NAV_ITEMS = [
   { path: '/data-download', label: 'Data Download', icon: '↓' },
+  { path: '/futures-chart', label: 'FUT Chart', icon: '◒' },
   { path: '/trade-entry', label: 'Trade Entry', icon: '↗' },
   { path: '/settings', label: 'Settings', icon: '⚙' },
 ]
@@ -54,6 +56,32 @@ function DataDownloadPage() {
 
 function Metric({ label, value, tone = '' }) { return <div className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></div> }
 
+function FuturesChartPage() {
+  const [data, setData] = useState([]); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [range, setRange] = useState('1Y'); const [hovered, setHovered] = useState(null)
+  useEffect(() => { api('/api/market/futures').then((payload) => setData(payload.candles || [])).catch((error) => setMessage(error.message)).finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    if (!data.length) return undefined
+    const container = document.getElementById('futures-chart')
+    if (!container) return undefined
+    const chart = createChart(container, { autoSize: true, height: 520, layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#587391' }, grid: { vertLines: { color: '#e7f0fa' }, horzLines: { color: '#e7f0fa' } }, rightPriceScale: { borderColor: '#d8e6f4' }, timeScale: { borderColor: '#d8e6f4', timeVisible: false, rightOffset: 5 }, crosshair: { mode: 0 } })
+    const series = chart.addSeries(CandlestickSeries, { upColor: '#1fb982', downColor: '#ef6676', borderVisible: false, wickUpColor: '#159a68', wickDownColor: '#d65364' })
+    series.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })))
+    const visibleCount = range === 'ALL' ? data.length : range === '1M' ? 22 : range === '3M' ? 66 : 252
+    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - visibleCount), to: data.length + 2 })
+    chart.subscribeCrosshairMove((param) => { const candle = param.seriesData?.get(series); setHovered(candle ? { ...candle, time: candle.time } : null) })
+    const resize = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }))
+    resize.observe(container)
+    return () => { resize.disconnect(); chart.remove() }
+  }, [data, range])
+  const latest = data[data.length - 1]; const display = hovered || latest; const latestChange = latest ? latest.close - latest.open : 0
+  return <>
+    <PageHeader eyebrow="MARKET VIEW" title="SILVER Futures" subtitle="Daily major-contract futures candles used for the strategy signal and ATM lookup." action={<span className="badge sky">TRADINGVIEW CHART</span>} />
+    {message && <div className="notice error">{message}</div>}
+    <section className="chart-hero"><div className="chart-hero-top"><div><span className="eyebrow">{display?.time || '—'} · {display?.time ? 'SILVER' : 'Loading data'}</span><div className="chart-price">{display ? number(display.close, 0) : '—'} <span className={latestChange >= 0 ? 'green-text' : 'red-text'}>{display ? `${latestChange >= 0 ? '+' : ''}${number(latestChange, 0)}` : ''}</span></div></div><div className="chart-ohlc">{[['O', display?.open, 'cyan-text'], ['H', display?.high, 'yellow-text'], ['L', display?.low, 'red-text'], ['C', display?.close, 'green-text']].map(([label, value, tone]) => <div key={label}><span>{label}</span><strong className={tone}>{number(value, 0)}</strong></div>)}</div></div><div className="chart-range" role="group" aria-label="Chart range">{['1M', '3M', '1Y', 'ALL'].map((item) => <button type="button" key={item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}</button>)}</div><div id="futures-chart" className="futures-chart" role="img" aria-label="Interactive daily SILVER futures candlestick chart" />{loading && <div className="chart-loading">Loading futures candles…</div>}</section>
+    <div className="chart-footnote"><span>Major SILVER · nearest unexpired contract per trading day</span><span>{data.length.toLocaleString('en-IN')} daily candles</span></div>
+  </>
+}
+
 function TradeEntryPage() {
   const [date, setDate] = useState('2025-01-06'); const [preview, setPreview] = useState(null); const [loading, setLoading] = useState(false); const [message, setMessage] = useState('')
   const previewTrade = () => { setLoading(true); setMessage(''); api(`/api/strategy/preview?date=${encodeURIComponent(date)}`).then(setPreview).catch((error) => { setPreview(null); setMessage(error.message) }).finally(() => setLoading(false)) }
@@ -87,6 +115,6 @@ export default function App() {
   const [path, setPath] = useState(window.location.pathname === '/' ? '/data-download' : window.location.pathname); const [health, setHealth] = useState(null)
   useEffect(() => { document.title = 'MCX EOD Strategy'; api('/api/health').then((value) => { setHealth(value); window.__MCX_BRIDGE__ = value }).catch((error) => { window.__MCX_BRIDGE_ERROR__ = error.message }) }, [])
   useEffect(() => { const onPop = () => setPath(window.location.pathname); window.addEventListener('popstate', onPop); return () => window.removeEventListener('popstate', onPop) }, [])
-  const navigate = (next) => { window.history.pushState({}, '', next); setPath(next) }; const page = useMemo(() => path === '/trade-entry' ? <TradeEntryPage /> : path === '/settings' ? <SettingsPage /> : <DataDownloadPage />, [path])
+  const navigate = (next) => { window.history.pushState({}, '', next); setPath(next) }; const page = useMemo(() => path === '/futures-chart' ? <FuturesChartPage /> : path === '/trade-entry' ? <TradeEntryPage /> : path === '/settings' ? <SettingsPage /> : <DataDownloadPage />, [path])
   return <AppShell path={path} navigate={navigate} health={health}>{page}</AppShell>
 }
