@@ -103,3 +103,4 @@ body { background: linear-gradient(120deg, #ffffff 0%, #eef8ff 38%, #e7f0ff 72%,
 .futures-page-wrap:not(:has(.replay-bar)) .chart-layout { height: calc(100% - 38px); }
 .indicator-menu { min-width: 180px; }
 @media (max-width: 1180px) { .shortcut-hint { display: none; }.replay-date { display: none; } }
+.replay-bar > button:disabled { opacity: .35; cursor: not-allowed; }
