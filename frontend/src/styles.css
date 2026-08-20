@@ -53,3 +53,23 @@ body { background: linear-gradient(135deg, #ffffff 0%, #f8fcff 42%, #eaf6ff 100%
 .chart-range { position: relative; z-index: 2; display: flex; gap: 4px; margin: 0 0 8px auto; justify-content: flex-end; }.chart-range button { padding: 5px 9px; border: 0; border-radius: 5px; color: #7890aa; background: transparent; font: 500 10px 'DM Mono', monospace; }.chart-range button:hover, .chart-range button.selected { color: #1673b2; background: #e5f5ff; }
 .futures-chart { position: relative; min-height: 520px; }.chart-loading { position: absolute; top: 53%; left: 0; width: 100%; color: #6b91b1; font-size: 12px; text-align: center; }.chart-footnote { display: flex; justify-content: space-between; padding: 4px 4px 0; color: #829bb3; font: 10px 'DM Mono', monospace; }
 @media (max-width: 780px) { .chart-hero-top { display: block; }.chart-ohlc { justify-content: space-between; margin-top: 22px; }.chart-footnote { display: block; line-height: 1.8; }.futures-chart { min-height: 420px; } }
+
+/* Compact TradingView-style workspace */
+.sidebar.collapsed { width: 68px; flex-basis: 68px; padding-inline: 10px; }
+.sidebar.collapsed .brand { justify-content: center; padding-inline: 0; }
+.sidebar.collapsed .brand-copy, .sidebar.collapsed .sidebar-label, .sidebar.collapsed .nav-label, .sidebar.collapsed .footer-copy { display: none; }
+.sidebar.collapsed .nav-item { justify-content: center; padding-inline: 8px; }
+.sidebar.collapsed .sidebar-footer { justify-content: center; padding-inline: 0; }
+.sidebar.expanded { width: 244px; flex-basis: 244px; }
+.menu-toggle { display: grid; place-items: center; width: 28px; height: 28px; margin-right: 12px; padding: 0; border: 1px solid #cfe1f2; border-radius: 6px; color: #287bb2; background: #f1f9ff; font: 500 11px 'DM Mono', monospace; }
+.menu-toggle:hover { color: #fff; background: #287bb2; }
+.futures-main { height: 100vh; overflow: hidden; }
+.futures-main .topbar { height: 48px; padding-inline: 18px; }
+.futures-main .workspace-label { display: none; }
+.futures-page-wrap { width: 90vw; max-width: none; height: calc(100vh - 48px); margin: 0; padding: 10px 0 12px; overflow: hidden; }
+.futures-page-wrap .chart-hero { height: calc(100vh - 72px); min-height: 0; margin: 0; padding: 0 14px 8px; border-radius: 9px; }
+.chart-toolbar { display: flex; align-items: center; justify-content: space-between; height: 38px; border-bottom: 1px solid #e4edf6; }
+.chart-symbol { color: #183653; font: 12px 'DM Mono', monospace; }.chart-symbol strong { font-weight: 500; }.chart-symbol span { color: #8da2b8; }
+.futures-page-wrap .chart-range { margin: 0; }
+.futures-page-wrap .futures-chart { height: calc(100vh - 121px); min-height: 0; }
+.futures-page-wrap .chart-loading { top: 50%; }
