@@ -1,0 +1,41 @@
+{
+  "paths": {
+    "silver_futures_csv": "data/inputs/silver_futures.csv",
+    "options_csv": "data/inputs/silverm_options.csv",
+    "trades_csv": "data/outputs/strategy_trades.csv",
+    "mtm_database": "data/outputs/strategy_mtm.duckdb",
+    "mtm_csv": "data/outputs/strategy_mtm.csv"
+  },
+  "market": {
+    "futures_symbol": "SILVER",
+    "option_symbol": "SILVERM",
+    "contract_selection": "nearest_expiry",
+    "atm_rounding": {
+      "price_threshold": 200000,
+      "interval_below_threshold": 1000,
+      "interval_at_or_above_threshold": 5000
+    },
+    "quantity_rules": {
+      "silver_price_threshold": 200000,
+      "quantity_below_or_equal": 10,
+      "quantity_above": 5
+    }
+  },
+  "strategy": {
+    "target_rules": {
+      "premium_below": 4000,
+      "premium_middle_upper": 8000,
+      "target_below": 500,
+      "target_middle": 1000,
+      "target_above": 1500
+    },
+    "expiry_switch_days": 10,
+    "allow_expiry_day": false,
+    "date_display_format": "%d-%m-%Y"
+  },
+  "console": {
+    "use_colors": true,
+    "force_colors": false,
+    "show_daily_candles": true
+  }
+}

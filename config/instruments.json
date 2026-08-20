@@ -1,0 +1,22 @@
+{
+  "instruments": [
+    "FUTCOM",
+    "FUTIDX",
+    "OPTCOM",
+    "OPTFUT",
+    "OPTIDX"
+  ],
+  "default_instrument": "OPTFUT",
+  "default_commodity": "SILVERM",
+  "option_instruments": [
+    "OPTCOM",
+    "OPTFUT",
+    "OPTIDX"
+  ],
+  "mcx_url": "https://www.mcxindia.com/market-data/bhavcopy",
+  "max_days_before_expiry": 90,
+  "request_delay_seconds": 0.25,
+  "max_retries": 3,
+  "page_timeout_seconds": 60,
+  "api_timeout_seconds": 30
+}

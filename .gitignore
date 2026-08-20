@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+data/outputs/*.tmp
+
+# Local market data and generated strategy reports
+data/inputs/*.csv
+data/outputs/*.csv
+data/outputs/*.duckdb
+
+# Browser/test artefacts
+.playwright-mcp/
