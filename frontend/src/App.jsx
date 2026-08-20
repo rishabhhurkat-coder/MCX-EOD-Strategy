@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CandlestickSeries, HistogramSeries, createChart } from 'lightweight-charts'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CandlestickSeries, HistogramSeries, LineSeries, createChart } from 'lightweight-charts'
 
 const NAV_ITEMS = [
   { path: '/data-download', label: 'Data Download', icon: '↓' },
@@ -57,30 +57,80 @@ function DataDownloadPage() {
 
 function Metric({ label, value, tone = '' }) { return <div className={`metric ${tone}`}><span>{label}</span><strong>{value}</strong></div> }
 
+function simpleMovingAverage(values, period) {
+  return values.map((item, index) => index < period - 1 ? null : { time: item.time, value: values.slice(index - period + 1, index + 1).reduce((sum, point) => sum + point.close, 0) / period }).filter(Boolean)
+}
+
+function exponentialMovingAverage(values, period) {
+  if (values.length < period) return []
+  const multiplier = 2 / (period + 1); let ema = values.slice(0, period).reduce((sum, point) => sum + point.close, 0) / period
+  const result = [{ time: values[period - 1].time, value: ema }]
+  values.slice(period).forEach((point) => { ema = (point.close - ema) * multiplier + ema; result.push({ time: point.time, value: ema }) })
+  return result
+}
+
+function relativeStrengthIndex(values, period = 14) {
+  if (values.length <= period) return []
+  let gains = 0; let losses = 0
+  for (let index = 1; index <= period; index += 1) { const change = values[index].close - values[index - 1].close; gains += Math.max(change, 0); losses += Math.max(-change, 0) }
+  const result = [{ time: values[period].time, value: losses === 0 ? 100 : 100 - (100 / (1 + (gains / period) / (losses / period))) }]
+  for (let index = period + 1; index < values.length; index += 1) {
+    const change = values[index].close - values[index - 1].close; gains = (gains * (period - 1) + Math.max(change, 0)) / period; losses = (losses * (period - 1) + Math.max(-change, 0)) / period
+    result.push({ time: values[index].time, value: losses === 0 ? 100 : 100 - (100 / (1 + gains / losses)) })
+  }
+  return result
+}
+
+function bollingerBands(values, period = 20, multiplier = 2) {
+  const middle = []; const upper = []; const lower = []
+  values.forEach((item, index) => { if (index < period - 1) return; const window = values.slice(index - period + 1, index + 1).map((point) => point.close); const average = window.reduce((sum, value) => sum + value, 0) / period; const deviation = Math.sqrt(window.reduce((sum, value) => sum + ((value - average) ** 2), 0) / period); middle.push({ time: item.time, value: average }); upper.push({ time: item.time, value: average + multiplier * deviation }); lower.push({ time: item.time, value: average - multiplier * deviation }) })
+  return { middle, upper, lower }
+}
+
+function volumeWeightedAveragePrice(values) {
+  let totalVolume = 0; let totalValue = 0
+  return values.map((item) => { totalVolume += item.volume; totalValue += ((item.high + item.low + item.close) / 3) * item.volume; return { time: item.time, value: totalVolume ? totalValue / totalVolume : item.close } })
+}
+
+function movingAverageLine(values, period, source = 'close') {
+  const points = values.map((item) => ({ time: item.time, close: source === 'close' ? item.close : item.value }))
+  return exponentialMovingAverage(points, period)
+}
+
 function FuturesChartPage() {
-  const [data, setData] = useState([]); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [range, setRange] = useState('1Y')
+  const chartRef = useRef(null); const [data, setData] = useState([]); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [range, setRange] = useState('1Y'); const [selectedTool, setSelectedTool] = useState('crosshair'); const [indicatorMenu, setIndicatorMenu] = useState(false); const [replayMode, setReplayMode] = useState(false); const [replayDate, setReplayDate] = useState(''); const [gotoDate, setGotoDate] = useState(''); const [indicators, setIndicators] = useState({ volume: true, sma20: false, ema50: false, bb20: false, vwap: false, rsi14: false, macd: false })
   useEffect(() => { api('/api/market/futures').then((payload) => setData(payload.candles || [])).catch((error) => setMessage(error.message)).finally(() => setLoading(false)) }, [])
   useEffect(() => { const timer = window.setInterval(() => { api('/api/market/futures').then((payload) => setData(payload.candles || [])).catch(() => {}) }, 30000); return () => window.clearInterval(timer) }, [])
+  const chartData = useMemo(() => replayMode && replayDate ? data.filter((candle) => candle.time <= replayDate) : data, [data, replayDate, replayMode])
   useEffect(() => {
-    if (!data.length) return undefined
+    if (!chartData.length) return undefined
     const container = document.getElementById('futures-chart')
     if (!container) return undefined
     const chart = createChart(container, { autoSize: true, layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#587391' }, grid: { vertLines: { color: '#e7f0fa' }, horzLines: { color: '#e7f0fa' } }, rightPriceScale: { borderColor: '#d8e6f4' }, timeScale: { borderColor: '#d8e6f4', timeVisible: false, rightOffset: 5, rightBarStaysOnScroll: true, shiftVisibleRangeOnNewBar: true }, crosshair: { mode: 0 }, handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true }, handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true }, kineticScroll: { mouse: true, touch: true } })
     const series = chart.addSeries(CandlestickSeries, { upColor: '#1fb982', downColor: '#ef6676', borderVisible: false, wickUpColor: '#159a68', wickDownColor: '#d65364' })
-    series.setData(data.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })))
-    const volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' })
-    volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
-    volumeSeries.setData(data.map(({ time, open, close, volume }) => ({ time, value: volume, color: close >= open ? '#8bdcc1' : '#f4a3ad' })))
-    const visibleCount = range === 'ALL' ? data.length : range === '1M' ? 22 : range === '3M' ? 66 : 252
-    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, data.length - visibleCount), to: data.length + 2 })
+    series.setData(chartData.map(({ time, open, high, low, close }) => ({ time, open, high, low, close })))
+    if (indicators.volume) { const volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' }, 1); volumeSeries.setData(chartData.map(({ time, open, close, volume }) => ({ time, value: volume, color: close >= open ? '#8bdcc1' : '#f4a3ad' }))); chart.panes()[1]?.setHeight(105) }
+    if (indicators.sma20) chart.addSeries(LineSeries, { color: '#277ff1', lineWidth: 2, title: 'SMA 20' }).setData(simpleMovingAverage(chartData, 20))
+    if (indicators.ema50) chart.addSeries(LineSeries, { color: '#d48b16', lineWidth: 2, title: 'EMA 50' }).setData(exponentialMovingAverage(chartData, 50))
+    if (indicators.bb20) { const bands = bollingerBands(chartData); chart.addSeries(LineSeries, { color: '#71a9e7', lineWidth: 1, title: 'BB 20' }).setData(bands.upper); chart.addSeries(LineSeries, { color: '#71a9e7', lineWidth: 1, title: 'BB 20' }).setData(bands.lower); }
+    if (indicators.vwap) chart.addSeries(LineSeries, { color: '#e06c9b', lineWidth: 2, title: 'VWAP' }).setData(volumeWeightedAveragePrice(chartData))
+    const oscillatorPane = indicators.volume ? 2 : 1
+    if (indicators.rsi14) { const rsiSeries = chart.addSeries(LineSeries, { color: '#9b63db', lineWidth: 2, title: 'RSI 14', autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) }, oscillatorPane); rsiSeries.setData(relativeStrengthIndex(chartData)); chart.panes()[oscillatorPane]?.setHeight(120) }
+    if (indicators.macd) { const fast = movingAverageLine(chartData, 12); const slow = movingAverageLine(chartData, 26); const macd = fast.slice(fast.length - slow.length).map((item, index) => ({ time: item.time, value: item.value - slow[index].value })); const signal = movingAverageLine(macd.map((item) => ({ ...item, close: item.value })), 9, 'value'); chart.addSeries(LineSeries, { color: '#277ff1', lineWidth: 2, title: 'MACD' }, oscillatorPane).setData(macd); chart.addSeries(LineSeries, { color: '#e06c9b', lineWidth: 2, title: 'Signal' }, oscillatorPane).setData(signal); chart.panes()[oscillatorPane]?.setHeight(130) }
+    const visibleCount = range === 'ALL' ? chartData.length : range === '1M' ? 22 : range === '3M' ? 66 : 252
+    chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, chartData.length - visibleCount), to: chartData.length + 2 })
+    chartRef.current = chart
     const resize = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }))
     resize.observe(container)
-    return () => { resize.disconnect(); chart.remove() }
-  }, [data, range])
+    return () => { resize.disconnect(); chart.remove(); chartRef.current = null }
+  }, [chartData, range, indicators])
+  const setIndicator = (name) => setIndicators((current) => ({ ...current, [name]: !current[name] }))
+  const goToSelectedDate = () => { const target = gotoDate || replayDate; const index = chartData.findIndex((candle) => candle.time === target); if (index < 0) { setMessage('That date is not available in the FUT CSV.'); return } setMessage(''); chartRef.current?.timeScale().setVisibleLogicalRange({ from: Math.max(0, index - 45), to: Math.min(chartData.length + 2, index + 45) }) }
+  const toggleReplay = () => { if (!replayMode) { setReplayDate(replayDate || data[data.length - 1]?.time || ''); setReplayMode(true) } else setReplayMode(false) }
   return <section className="chart-hero">
     {message && <div className="notice error">{message}</div>}
-    <div className="chart-toolbar"><div className="chart-symbol"><strong>SILVER</strong><span>· 1D · Futures</span></div><div className="chart-range" role="group" aria-label="Chart range">{['1M', '3M', '1Y', 'ALL'].map((item) => <button type="button" key={item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}</button>)}</div></div>
-    <div id="futures-chart" className="futures-chart" role="img" aria-label="Interactive daily SILVER futures candlestick chart" />{loading && <div className="chart-loading">Loading futures candles…</div>}
+    <div className="chart-toolbar"><div className="chart-symbol"><strong>SILVER</strong><span>· 1D · Futures</span></div><div className="chart-actions"><div className="indicator-control"><button type="button" className={`chart-action ${indicatorMenu ? 'selected' : ''}`} onClick={() => setIndicatorMenu((open) => !open)}>Indicators <span>⌄</span></button>{indicatorMenu && <div className="indicator-menu">{[['volume', 'Volume'], ['sma20', 'SMA 20'], ['ema50', 'EMA 50'], ['bb20', 'Bollinger Bands'], ['vwap', 'VWAP'], ['rsi14', 'RSI 14'], ['macd', 'MACD']].map(([key, label]) => <label key={key}><input type="checkbox" checked={indicators[key]} onChange={() => setIndicator(key)} />{label}</label>)}</div>}</div><label className="goto-control"><span>Go to date</span><input type="date" value={gotoDate} onChange={(event) => setGotoDate(event.target.value)} /><button type="button" onClick={goToSelectedDate}>↗</button></label>{replayMode && <label className="goto-control replay-control"><span>Replay to</span><input type="date" value={replayDate} onChange={(event) => setReplayDate(event.target.value)} /></label>}<button type="button" className={`chart-action ${replayMode ? 'selected replay-on' : ''}`} onClick={toggleReplay}>▶ Replay</button><div className="chart-range" role="group" aria-label="Chart range">{['1M', '3M', '1Y', 'ALL'].map((item) => <button type="button" key={item} className={range === item ? 'selected' : ''} onClick={() => setRange(item)}>{item}</button>)}</div></div></div>
+    <div className="chart-layout"><div className="drawing-toolbar" aria-label="Drawing tools">{[['crosshair', '⌖', 'Crosshair'], ['trendline', '╱', 'Trend line'], ['horizontal', '━', 'Horizontal line'], ['vertical', '┃', 'Vertical line'], ['rectangle', '□', 'Rectangle'], ['text', 'T', 'Text note']].map(([tool, icon, label]) => <button type="button" title={label} aria-label={label} className={selectedTool === tool ? 'active' : ''} key={tool} onClick={() => setSelectedTool(tool)}>{icon}</button>)}</div><div id="futures-chart" className="futures-chart" role="img" aria-label="Interactive daily SILVER futures candlestick chart" />{loading && <div className="chart-loading">Loading futures candles…</div>}</div>
   </section>
 }
 

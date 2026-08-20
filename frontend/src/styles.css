@@ -72,4 +72,12 @@ body { background: linear-gradient(135deg, #ffffff 0%, #f8fcff 42%, #eaf6ff 100%
 .chart-symbol { color: #183653; font: 12px 'DM Mono', monospace; }.chart-symbol strong { font-weight: 500; }.chart-symbol span { color: #8da2b8; }
 .futures-page-wrap .chart-range { margin: 0; }
 .futures-page-wrap .futures-chart { height: calc(100vh - 121px); min-height: 0; }
+.chart-hero { overflow: visible; }
+.chart-toolbar { position: relative; z-index: 5; }
+.chart-actions { display: flex; align-items: center; gap: 7px; }
+.chart-action, .goto-control button { border: 0; border-radius: 5px; color: #667e98; background: transparent; font: 500 10px 'DM Mono', monospace; }
+.chart-action { padding: 6px 9px; }.chart-action:hover, .chart-action.selected { color: #176eaa; background: #e4f3ff; }.chart-action.replay-on { color: #b14c5e; background: #fff0f2; }
+.indicator-control { position: relative; }.indicator-menu { position: absolute; top: 31px; right: 0; display: grid; min-width: 142px; padding: 8px; border: 1px solid #d9e7f3; border-radius: 7px; background: #fff; box-shadow: 0 10px 25px rgba(41, 104, 153, .15); }.indicator-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 5px; color: #526d89; font: 11px 'DM Sans', sans-serif; white-space: nowrap; }.indicator-menu input { accent-color: #277ff1; }
+.goto-control { display: flex; align-items: center; gap: 5px; color: #91a3b6; font: 10px 'DM Mono', monospace; }.goto-control input { width: 115px; padding: 5px 6px; border: 1px solid #d9e7f3; border-radius: 5px; color: #46627f; background: #fbfdff; font: 10px 'DM Mono', monospace; }.goto-control button { padding: 5px 7px; color: #217bb7; background: #eaf6ff; }.replay-control input { width: 108px; }
+.chart-layout { position: relative; display: flex; height: calc(100% - 38px); min-height: 0; }.drawing-toolbar { display: flex; z-index: 3; flex: 0 0 36px; flex-direction: column; align-items: center; gap: 3px; padding: 8px 3px; border-right: 1px solid #e3edf6; background: rgba(251, 253, 255, .88); }.drawing-toolbar button { display: grid; place-items: center; width: 29px; height: 29px; padding: 0; border: 0; border-radius: 5px; color: #7690a8; background: transparent; font-size: 16px; }.drawing-toolbar button:hover, .drawing-toolbar button.active { color: #1d78b5; background: #e2f3ff; }.futures-page-wrap .futures-chart { flex: 1; width: auto; }
 .futures-page-wrap .chart-loading { top: 50%; }
