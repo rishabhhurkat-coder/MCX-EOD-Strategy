@@ -9,6 +9,26 @@ editable strategy settings, interactive trade monitoring, and DuckDB-backed MTM 
 python "backend\StategyRules.py"
 ```
 
+## Start the UI
+
+Double-click the Desktop shortcut:
+
+```text
+MCX EOD Strategy.lnk
+```
+
+The shortcut runs `launch_mcx_eod_strategy.vbs` invisibly. It starts the local
+Python API bridge and Vite frontend, finds the next available ports, waits for
+both services to respond, and opens the UI in the browser. The React page is
+intentionally blank for now, but it already connects to `/api/health` through
+the Vite proxy.
+
+The bridge endpoints currently include:
+
+- `/api/health`
+- `/api/status`
+- `/api/settings`
+
 The strategy uses major SILVER futures only to identify the daily Silver price
 and ATM strike. The actual trade, target, stop-loss, averaging, MTM, and exit
 calculations use the selected SILVERM option contract.
@@ -66,7 +86,7 @@ When more than 16 expiry windows are required, the downloader automatically uses
 ## Folders:
 
 - `backend` — the single downloader Python file.
-- `frontend` — reserved for a future user interface.
+- `frontend` — Vite + React UI.
 - `data/inputs` — local downloaded option and major-SILVER futures CSV files.
 - `data/outputs` — local strategy CSV, MTM CSV, and DuckDB files.
 - `config` — available MCX instruments and defaults.

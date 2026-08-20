@@ -8,6 +8,12 @@ data/outputs/*.tmp
 data/inputs/*.csv
 data/outputs/*.csv
 data/outputs/*.duckdb
+data/outputs/*.log
+data/outputs/ui_launcher_state.json
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
 
 # Browser/test artefacts
 .playwright-mcp/
