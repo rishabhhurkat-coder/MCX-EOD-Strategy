@@ -274,6 +274,12 @@ def target_points_for_premium(premium: float, settings: dict) -> float:
     return float(rules.get("target_above", 1500))
 
 
+def stop_loss_from_candle(direction: str, candle) -> float:
+    if str(direction).strip().upper() == "BUY":
+        return float(candle["Low"])
+    return float(candle["High"])
+
+
 def quantity_for_silver_price(silver_price: float, settings: dict) -> int:
     rules = settings["market"].get("quantity_rules", {})
     threshold = float(rules.get("silver_price_threshold", 200000))
@@ -405,6 +411,7 @@ def find_option_row(
     requested_strike: float,
     option_type: str,
     allow_nearest: bool = True,
+    strike_interval: float | None = None,
 ):
     rows = options[
         (options["Date"] == trade_date)
@@ -421,6 +428,13 @@ def find_option_row(
     if not allow_nearest:
         return None, None
 
+    if strike_interval is not None and strike_interval > 0:
+        remainder = rows["Strike Price"].mod(float(strike_interval)).abs()
+        reverse_remainder = (float(strike_interval) - remainder).abs()
+        rows = rows[(remainder < 0.000001) | (reverse_remainder < 0.000001)].copy()
+        if rows.empty:
+            return None, None
+
     rows["_distance"] = (rows["Strike Price"] - requested_strike).abs()
     rows = rows.sort_values(["_distance", "Strike Price"], kind="stable")
     row = rows.iloc[0].drop(labels="_distance")
@@ -432,24 +446,55 @@ def select_expiry(options: pd.DataFrame, trade_date, requested_strike: float, op
     if not expiries:
         return None, None, None
 
+    strike_interval = atm_interval_for_price(requested_strike, settings)
     current = expiries[0]
+    current_row, current_strike = find_option_row(
+        options,
+        trade_date,
+        current,
+        requested_strike,
+        option_type,
+        strike_interval=strike_interval,
+    )
+    if len(expiries) == 1:
+        return (current, current_strike, current_row) if current_row is not None else (None, None, None)
+
     switch_days = int(settings["strategy"]["expiry_switch_days"])
     days_left = (current - trade_date).days
-    if days_left > switch_days or len(expiries) == 1:
-        row, strike = find_option_row(options, trade_date, current, requested_strike, option_type)
-        return (current, strike, row) if row is not None else (None, None, None)
-
     next_expiry = expiries[1]
-    current_row, current_strike = find_option_row(options, trade_date, current, requested_strike, option_type)
-    next_row, next_strike = find_option_row(options, trade_date, next_expiry, requested_strike, option_type)
+    next_row, next_strike = find_option_row(
+        options,
+        trade_date,
+        next_expiry,
+        requested_strike,
+        option_type,
+        strike_interval=strike_interval,
+    )
+    current_premium = float(current_row["Close"]) if current_row is not None else 0.0
+
+    if current_row is not None and current_premium >= 3000:
+        suggested = "1"
+        suggestion_reason = "current month premium is >= 3,000"
+    elif days_left <= switch_days and next_row is not None:
+        suggested = "2"
+        suggestion_reason = f"current expiry has {days_left} days left"
+    elif current_row is not None:
+        suggested = "1"
+        suggestion_reason = f"current expiry has more than {switch_days} days left"
+    elif next_row is not None:
+        suggested = "2"
+        suggestion_reason = "current expiry option is not available"
+    else:
+        return None, None, None
 
     print(f"\n{paint('EXPIRY SELECTION', 'cyan')}")
     print(f"1. Current: {paint(display_date(current, settings), 'yellow')} | {days_left} days | "
-          f"{format_option(current_row, current_strike)}")
+          f"{format_option(current_row, current_strike)} {paint('(suggested)', 'green') if suggested == '1' else ''}")
     print(f"2. Next   : {paint(display_date(next_expiry, settings), 'yellow')} | "
-          f"{format_option(next_row, next_strike)}")
+          f"{format_option(next_row, next_strike)} {paint('(suggested)', 'green') if suggested == '2' else ''}")
+    print(f"Suggested: {suggested} ({suggestion_reason}). Press Enter to accept.")
     while True:
-        choice = input("Select expiry [1/2]: ").strip()
+        choice = input(f"Select expiry [1/2, Enter={suggested}]: ").strip() or suggested
         if choice == "1" and current_row is not None:
             return current, current_strike, current_row
         if choice == "2" and next_row is not None:
@@ -488,7 +533,14 @@ def target_event(options, positions: list[dict], target: float, trade_date) -> b
 def stop_loss_event(options, positions: list[dict], stop_loss: float, trade_date) -> bool:
     for position in positions:
         row = exact_option_row(options, position, trade_date)
-        if row is not None and float(row["High"]) >= stop_loss:
+        if row is None:
+            continue
+
+        close_price = float(row["Close"])
+        direction = str(position.get("direction", "SELL")).strip().upper()
+        if direction == "SELL" and close_price > stop_loss:
+            return True
+        if direction == "BUY" and close_price < stop_loss:
             return True
     return False
 
@@ -929,7 +981,7 @@ def process_trade(
     entry_price = float(option_row["Close"])
     target_points = target_points_for_premium(entry_price, settings)
     target = entry_price - target_points
-    stop_loss = float(option_row["High"])
+    stop_loss = stop_loss_from_candle(direction, option_row)
     quantity = quantity_for_silver_price(close_price, settings)
     show_entry(
         trade_date,
@@ -960,6 +1012,7 @@ def process_trade(
         "expiry": expiry,
         "strike": strike,
         "option_type": option_type,
+        "direction": direction,
         "entry_date": trade_date,
         "entry_price": entry_price,
         "entry_reason": "Original trade",
@@ -1058,7 +1111,7 @@ def process_trade(
                     print(paint("Averaging skipped: current ATM option is unavailable.", "yellow"))
                 else:
                     avg_price = float(avg_row["Close"])
-                    new_sl = current_high
+                    new_sl = stop_loss_from_candle(direction, option_candle)
                     average_entry = float(np.mean([p["entry_price"] for p in positions] + [avg_price]))
                     target_points = target_points_for_premium(average_entry, settings)
                     new_target = average_entry - target_points
@@ -1072,6 +1125,7 @@ def process_trade(
                             "expiry": avg_expiry,
                             "strike": avg_strike,
                             "option_type": option_type,
+                            "direction": direction,
                             "entry_date": current_date,
                             "entry_price": avg_price,
                             "entry_reason": "Averaging",
